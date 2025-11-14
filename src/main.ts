@@ -121,9 +121,6 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
       .addEventListener("click", () => {
         currentCell.value = numberHeld;
         numberHeld = 0;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          currentCell
-            .value.toString();
         updateInventory();
         currentCell.rect.closePopup();
       });
@@ -142,9 +139,6 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
       .addEventListener("click", () => {
         currentCell.value = numberHeld * 2;
         numberHeld = 0;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          currentCell
-            .value.toString();
         updateInventory();
         currentCell.rect.closePopup();
       });
@@ -158,9 +152,6 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
       .addEventListener("click", () => {
         numberHeld = currentCell.value;
         currentCell.value = 0;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          currentCell
-            .value.toString();
         updateInventory();
         currentCell.rect.closePopup();
       });
@@ -204,6 +195,13 @@ function spawnCache(i: number, j: number) {
   // Handle interactions with the cache
   rect.bindPopup(() => {
     return HandlePopup(thisCell);
+  });
+
+  rect.getPopup()?.on("remove", function () {
+    console.log("popup closed");
+    rect.bindPopup(() => {
+      return HandlePopup(thisCell);
+    });
   });
 }
 
