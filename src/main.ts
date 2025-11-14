@@ -11,8 +11,18 @@ import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
 // Import our luck function
 import luck from "./_luck.ts";
 
-// Create basic UI elements
+interface Cell {
+  value: number;
+  i: number;
+  j: number;
+  rect: leaflet.Rectangle;
+}
 
+const activeCells: Array<Cell> = [];
+
+let numberHeld: number = 0;
+
+// Create basic UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
@@ -34,8 +44,9 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 8;
-const CACHE_SPAWN_PROBABILITY = 0.1;
+const NEIGHBORHOOD_SIZE = 21;
+const PLAYER_RANGE = 5;
+//const CACHE_SPAWN_PROBABILITY = 1;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -45,6 +56,7 @@ const map = leaflet.map(mapDiv, {
   maxZoom: GAMEPLAY_ZOOM_LEVEL,
   zoomControl: false,
   scrollWheelZoom: false,
+  dragging: false,
 });
 
 // Populate the map with a background tile layer
@@ -58,16 +70,111 @@ leaflet
 
 // Add a marker to represent the player
 const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
-playerMarker.bindTooltip("That's you!");
+playerMarker.bindTooltip("You!");
 playerMarker.addTo(map);
 
 // Display the player's points
-let playerPoints = 0;
-statusPanelDiv.innerHTML = "No points yet...";
+statusPanelDiv.innerHTML = "You are not holding anything";
 
-// Add caches to the map by cell numbers
+function updateInventory() {
+  if (numberHeld != 0) {
+    statusPanelDiv.innerHTML = `You are holding the number = ${numberHeld}`;
+  } else {
+    statusPanelDiv.innerHTML = "You are not holding anything";
+  }
+}
+
+function makeValue(i: number, j: number): number {
+  const rng = luck([i, j, "initialValue"].toString());
+
+  if (rng < .5) {
+    return 0;
+  } else if (rng < .75) {
+    return 1;
+  } else if (rng < .9) {
+    return 2;
+  } else {
+    return 4;
+  }
+}
+
+function isInRange(i: number, j: number): boolean {
+  if (Math.sqrt(i ** 2 + j ** 2) < PLAYER_RANGE) {
+    return true;
+  }
+  return false;
+}
+
+function HandlePopup(currentCell: Cell): HTMLDivElement {
+  const popupDiv = document.createElement("div");
+
+  // set popup based on state of player and box
+  if (!isInRange) { //--------------------------------------------------------------------------------------player is not in range
+    popupDiv.innerHTML = `
+                <div>You are not in range!</div>`;
+  } else if (currentCell.value == 0 && numberHeld != 0) { //------------------------------------cell is empty but player has a number
+    popupDiv.innerHTML = `
+                <div>there is currrently nothing in this cell. Do you want to place your ${numberHeld} in the cell?</div>
+                <button id="interact">Place</button>`;
+    popupDiv
+      .querySelector<HTMLButtonElement>("#interact")!
+      .addEventListener("click", () => {
+        currentCell.value = numberHeld;
+        numberHeld = 0;
+        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+          currentCell
+            .value.toString();
+        updateInventory();
+        currentCell.rect.closePopup();
+      });
+  } else if (currentCell.value == 0) { //cell is empty and player does not have a number
+    popupDiv.innerHTML = `
+                <div>there is currrently nothing in this cell.</div>`;
+  } else if (currentCell.value == numberHeld) { //-----------------------------------------------cell has the same number as player
+    popupDiv.innerHTML = `
+      <div>There is a cache here at "${currentCell.i},${currentCell.j}". Would you like to spend your ${numberHeld} to place a <span id="value">${
+      numberHeld * 2
+    }.</div>
+      <button id="interact">craft</button>`;
+
+    popupDiv
+      .querySelector<HTMLButtonElement>("#interact")!
+      .addEventListener("click", () => {
+        currentCell.value = numberHeld * 2;
+        numberHeld = 0;
+        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+          currentCell
+            .value.toString();
+        updateInventory();
+        currentCell.rect.closePopup();
+      });
+  } else if (currentCell.value != 0 && numberHeld == 0) { // -------------------------------- player doesnt have anything but cell does
+    popupDiv.innerHTML = `
+                <div>There is a cache here at "${currentCell.i},${currentCell.j}". It has value <span id="value">${currentCell.value}</span>.</div>
+                <button id="interact">Pick up?</button>`;
+
+    popupDiv
+      .querySelector<HTMLButtonElement>("#interact")!
+      .addEventListener("click", () => {
+        numberHeld = currentCell.value;
+        currentCell.value = 0;
+        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+          currentCell
+            .value.toString();
+        updateInventory();
+        currentCell.rect.closePopup();
+      });
+  } else { //--------------------------------------------------------------------- player and cell does not hold the same non 0 number
+    popupDiv.innerHTML = `
+                You must have the same number as the cell to craft a bigger number`;
+  }
+  return popupDiv;
+}
+
+// Add caches to the map by cell number
 function spawnCache(i: number, j: number) {
   // Convert cell numbers into lat/lng bounds
+
   const origin = CLASSROOM_LATLNG;
   const bounds = leaflet.latLngBounds([
     [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
@@ -78,38 +185,31 @@ function spawnCache(i: number, j: number) {
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
+  const pointValue = makeValue(i, j);
+
+  const thisCell: Cell = {
+    value: pointValue,
+    i: i,
+    j: j,
+    rect: rect,
+  };
+
+  activeCells.push(thisCell);
+
+  //check if player is in bounds of box if not change it to red
+  if (!isInRange(i, j)) {
+    rect.setStyle({ color: "red" });
+  }
+
   // Handle interactions with the cache
   rect.bindPopup(() => {
-    // Each cache has a random point value, mutable by the player
-    let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
-
-    // The popup offers a description and button
-    const popupDiv = document.createElement("div");
-    popupDiv.innerHTML = `
-                <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
-                <button id="poke">poke</button>`;
-
-    // Clicking the button decrements the cache's value and increments the player's points
-    popupDiv
-      .querySelector<HTMLButtonElement>("#poke")!
-      .addEventListener("click", () => {
-        pointValue--;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          pointValue.toString();
-        playerPoints++;
-        statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
-      });
-
-    return popupDiv;
+    return HandlePopup(thisCell);
   });
 }
 
 // Look around the player's neighborhood for caches to spawn
 for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
   for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-    // If location i,j is lucky enough, spawn a cache!
-    if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      spawnCache(i, j);
-    }
+    spawnCache(i, j);
   }
 }
