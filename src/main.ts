@@ -23,7 +23,7 @@ interface playerInfo {
   marker: leaflet.Marker;
 }
 
-const activeCells: Array<Cell> = [];
+const activeCells: Map<string, Cell> = new Map();
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -45,9 +45,9 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 );
 
 // Tunable gameplay parameters
-const GAMEPLAY_ZOOM_LEVEL = 19;
+const GAMEPLAY_ZOOM_LEVEL = 19.2;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 21;
+const NEIGHBORHOOD_SIZE = 18;
 const PLAYER_RANGE = 5;
 //const CACHE_SPAWN_PROBABILITY = 1;
 
@@ -65,7 +65,7 @@ const map = leaflet.map(mapDiv, {
 // Populate the map with a background tile layer
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+    maxZoom: GAMEPLAY_ZOOM_LEVEL,
     attribution:
       '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   })
@@ -91,18 +91,42 @@ document.body.append(movementButtonsDiv);
 const northButton = document.createElement("button");
 northButton.innerHTML = "North";
 movementButtonsDiv.appendChild(northButton);
+northButton.addEventListener("click", () => {
+  MovePlayer(
+    player.marker.getLatLng().lat + TILE_DEGREES,
+    player.marker.getLatLng().lng,
+  );
+});
 
 const eastButton = document.createElement("button");
 eastButton.innerHTML = "East";
 movementButtonsDiv.appendChild(eastButton);
+eastButton.addEventListener("click", () => {
+  MovePlayer(
+    player.marker.getLatLng().lat,
+    player.marker.getLatLng().lng + TILE_DEGREES,
+  );
+});
 
 const southButton = document.createElement("button");
-southButton.innerHTML = "south";
+southButton.innerHTML = "South";
 movementButtonsDiv.appendChild(southButton);
+southButton.addEventListener("click", () => {
+  MovePlayer(
+    player.marker.getLatLng().lat - TILE_DEGREES,
+    player.marker.getLatLng().lng,
+  );
+});
 
 const westButton = document.createElement("button");
-westButton.innerHTML = "west";
+westButton.innerHTML = "West";
 movementButtonsDiv.appendChild(westButton);
+westButton.addEventListener("click", () => {
+  MovePlayer(
+    player.marker.getLatLng().lat,
+    player.marker.getLatLng().lng - TILE_DEGREES,
+  );
+});
 
 function updateInventory() {
   if (player.numberHeld != 0) {
@@ -116,11 +140,11 @@ function updateInventory() {
 function makeValue(i: number, j: number): number {
   const rng = luck([i, j, "initialValue"].toString());
 
-  if (rng < .3) {
+  if (rng < .7) {
     return 0;
-  } else if (rng < .7) {
+  } else if (rng < .85) {
     return 1;
-  } else if (rng < .9) {
+  } else if (rng < .95) {
     return 2;
   } else {
     return 4;
@@ -128,10 +152,46 @@ function makeValue(i: number, j: number): number {
 }
 
 function isInRange(i: number, j: number): boolean {
-  if (Math.sqrt(i ** 2 + j ** 2) < PLAYER_RANGE) {
+  const newI = i - latToCellI(player.marker.getLatLng().lat);
+  const newJ = j - lngToCellJ(player.marker.getLatLng().lng);
+  if (Math.sqrt(newI ** 2 + newJ ** 2) < PLAYER_RANGE) {
     return true;
   }
   return false;
+}
+
+function MovePlayer(lat: number, lng: number) {
+  player.marker.setLatLng(leaflet.latLng(lat, lng));
+  map.setView(player.marker.getLatLng(), GAMEPLAY_ZOOM_LEVEL, {
+    animate: false,
+  });
+
+  //modify existing cells or remove
+  const iStart = latToCellI(player.marker.getLatLng().lat) - NEIGHBORHOOD_SIZE;
+  const iEnd = latToCellI(player.marker.getLatLng().lat) + NEIGHBORHOOD_SIZE;
+  const jStart = lngToCellJ(player.marker.getLatLng().lng) - NEIGHBORHOOD_SIZE;
+  const jEnd = lngToCellJ(player.marker.getLatLng().lng) + NEIGHBORHOOD_SIZE;
+  for (let i = iStart; i < iEnd; i++) {
+    for (let j = jStart; j < jEnd; j++) {
+      console.log(i);
+      const thisCell = activeCells.get(`${i}, ${j}`);
+      if (thisCell === undefined) {
+        spawnCache(i, j);
+        continue;
+      }
+      HandlePopup(thisCell);
+      if (!isInRange(i, j)) {
+        thisCell.rect.setStyle({ color: "red" });
+      } else {
+        thisCell.rect.setStyle({ color: "#3388ff" });
+      }
+    }
+  }
+
+  //remove old cells
+  //for (const [key, value] of activeCells) {
+  //console.log(`${key}: ${value}`);
+  //}
 }
 
 function HandlePopup(currentCell: Cell): HTMLDivElement {
@@ -209,7 +269,7 @@ function latToCellI(lat: number): number {
   return Math.floor((lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
 }
 
-function lngToCellj(lng: number): number {
+function lngToCellJ(lng: number): number {
   return Math.floor((lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
 }
 
@@ -236,7 +296,7 @@ function spawnCache(i: number, j: number) {
     rect: rect,
   };
 
-  activeCells.push(thisCell);
+  activeCells.set(`${i}, ${j}`, thisCell);
 
   //check if player is in bounds of box if not change it to red
   if (!isInRange(i, j)) {
