@@ -87,9 +87,9 @@ function updateInventory() {
 function makeValue(i: number, j: number): number {
   const rng = luck([i, j, "initialValue"].toString());
 
-  if (rng < .5) {
+  if (rng < .3) {
     return 0;
-  } else if (rng < .75) {
+  } else if (rng < .7) {
     return 1;
   } else if (rng < .9) {
     return 2;
@@ -109,7 +109,7 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
   const popupDiv = document.createElement("div");
 
   // set popup based on state of player and box
-  if (!isInRange) { //--------------------------------------------------------------------------------------player is not in range
+  if (!isInRange) { //----------------------------------------------------------------------------------------player is not in range
     popupDiv.innerHTML = `
                 <div>You are not in range!</div>`;
   } else if (currentCell.value == 0 && numberHeld != 0) { //------------------------------------cell is empty but player has a number
@@ -124,12 +124,12 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
         updateInventory();
         currentCell.rect.closePopup();
       });
-  } else if (currentCell.value == 0) { //cell is empty and player does not have a number
+  } else if (currentCell.value == 0) { //--------------------------------------------cell is empty and player does not have a number
     popupDiv.innerHTML = `
                 <div>there is currrently nothing in this cell.</div>`;
-  } else if (currentCell.value == numberHeld) { //-----------------------------------------------cell has the same number as player
+  } else if (currentCell.value == numberHeld) { //------------------------------------------------cell has the same number as player
     popupDiv.innerHTML = `
-      <div>There is a cache here at "${currentCell.i},${currentCell.j}". Would you like to spend your ${numberHeld} to place a <span id="value">${
+      <div>There is a cache here at "${currentCell.i},${currentCell.j}". Would you like to spend your ${numberHeld} to place a ${
       numberHeld * 2
     }.</div>
       <button id="interact">craft</button>`;
@@ -142,9 +142,9 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
         updateInventory();
         currentCell.rect.closePopup();
       });
-  } else if (currentCell.value != 0 && numberHeld == 0) { // -------------------------------- player doesnt have anything but cell does
+  } else if (currentCell.value != 0 && numberHeld == 0) { // ---------------------------- player doesnt have anything but cell does
     popupDiv.innerHTML = `
-                <div>There is a cache here at "${currentCell.i},${currentCell.j}". It has value <span id="value">${currentCell.value}</span>.</div>
+                <div>There is a cache here at "${currentCell.i},${currentCell.j}". It has value ${currentCell.value}.</div>
                 <button id="interact">Pick up?</button>`;
 
     popupDiv
@@ -155,11 +155,25 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
         updateInventory();
         currentCell.rect.closePopup();
       });
-  } else { //--------------------------------------------------------------------- player and cell does not hold the same non 0 number
+  } else { //------------------------------------------------------------------- player and cell does not hold the same non 0 number
     popupDiv.innerHTML = `
                 You must have the same number as the cell to craft a bigger number`;
   }
+
   return popupDiv;
+}
+
+function updateTooltip(currentCell: Cell) {
+  if (currentCell.value != 0) {
+    currentCell.rect.bindTooltip(currentCell.value.toString(), {
+      permanent: true,
+      direction: "center",
+      className: "cell-label",
+      interactive: false,
+    });
+  } else {
+    currentCell.rect.unbindTooltip();
+  }
 }
 
 // Add caches to the map by cell number
@@ -198,11 +212,12 @@ function spawnCache(i: number, j: number) {
   });
 
   rect.getPopup()?.on("remove", function () {
-    console.log("popup closed");
     rect.bindPopup(() => {
       return HandlePopup(thisCell);
     });
+    updateTooltip(thisCell);
   });
+  updateTooltip(thisCell);
 }
 
 // Look around the player's neighborhood for caches to spawn
