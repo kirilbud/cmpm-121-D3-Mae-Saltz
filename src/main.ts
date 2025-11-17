@@ -18,9 +18,12 @@ interface Cell {
   rect: leaflet.Rectangle;
 }
 
-const activeCells: Array<Cell> = [];
+interface playerInfo {
+  numberHeld: number;
+  marker: leaflet.Marker;
+}
 
-let numberHeld: number = 0;
+const activeCells: Array<Cell> = [];
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -73,12 +76,38 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("You!");
 playerMarker.addTo(map);
 
+const player: playerInfo = {
+  numberHeld: 0,
+  marker: playerMarker,
+};
+
 // Display the player's points
 statusPanelDiv.innerHTML = "You are not holding anything";
 
+// Movement Buttons
+const movementButtonsDiv = document.createElement("div");
+document.body.append(movementButtonsDiv);
+
+const northButton = document.createElement("button");
+northButton.innerHTML = "North";
+movementButtonsDiv.appendChild(northButton);
+
+const eastButton = document.createElement("button");
+eastButton.innerHTML = "East";
+movementButtonsDiv.appendChild(eastButton);
+
+const southButton = document.createElement("button");
+southButton.innerHTML = "south";
+movementButtonsDiv.appendChild(southButton);
+
+const westButton = document.createElement("button");
+westButton.innerHTML = "west";
+movementButtonsDiv.appendChild(westButton);
+
 function updateInventory() {
-  if (numberHeld != 0) {
-    statusPanelDiv.innerHTML = `You are holding the number = ${numberHeld}`;
+  if (player.numberHeld != 0) {
+    statusPanelDiv.innerHTML =
+      `You are holding the number = ${player.numberHeld}`;
   } else {
     statusPanelDiv.innerHTML = "You are not holding anything";
   }
@@ -109,40 +138,40 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
   const popupDiv = document.createElement("div");
 
   // set popup based on state of player and box
-  if (!isInRange) { //----------------------------------------------------------------------------------------player is not in range
+  if (!isInRange(currentCell.i, currentCell.j)) { //----------------------------------------------------------------------------------------player is not in range
     popupDiv.innerHTML = `
                 <div>You are not in range!</div>`;
-  } else if (currentCell.value == 0 && numberHeld != 0) { //------------------------------------cell is empty but player has a number
+  } else if (currentCell.value == 0 && player.numberHeld != 0) { //------------------------------------cell is empty but player has a number
     popupDiv.innerHTML = `
-                <div>there is currrently nothing in this cell. Do you want to place your ${numberHeld} in the cell?</div>
+                <div>there is currrently nothing in this cell. Do you want to place your ${player.numberHeld} in the cell?</div>
                 <button id="interact">Place</button>`;
     popupDiv
       .querySelector<HTMLButtonElement>("#interact")!
       .addEventListener("click", () => {
-        currentCell.value = numberHeld;
-        numberHeld = 0;
+        currentCell.value = player.numberHeld;
+        player.numberHeld = 0;
         updateInventory();
         currentCell.rect.closePopup();
       });
   } else if (currentCell.value == 0) { //--------------------------------------------cell is empty and player does not have a number
     popupDiv.innerHTML = `
                 <div>there is currrently nothing in this cell.</div>`;
-  } else if (currentCell.value == numberHeld) { //------------------------------------------------cell has the same number as player
+  } else if (currentCell.value == player.numberHeld) { //------------------------------------------------cell has the same number as player
     popupDiv.innerHTML = `
-      <div>There is a cache here at "${currentCell.i},${currentCell.j}". Would you like to spend your ${numberHeld} to place a ${
-      numberHeld * 2
+      <div>There is a cache here at "${currentCell.i},${currentCell.j}". Would you like to spend your ${player.numberHeld} to place a ${
+      player.numberHeld * 2
     }.</div>
       <button id="interact">craft</button>`;
 
     popupDiv
       .querySelector<HTMLButtonElement>("#interact")!
       .addEventListener("click", () => {
-        currentCell.value = numberHeld * 2;
-        numberHeld = 0;
+        currentCell.value = player.numberHeld * 2;
+        player.numberHeld = 0;
         updateInventory();
         currentCell.rect.closePopup();
       });
-  } else if (currentCell.value != 0 && numberHeld == 0) { // ---------------------------- player doesnt have anything but cell does
+  } else if (currentCell.value != 0 && player.numberHeld == 0) { // ---------------------------- player doesnt have anything but cell does
     popupDiv.innerHTML = `
                 <div>There is a cache here at "${currentCell.i},${currentCell.j}". It has value ${currentCell.value}.</div>
                 <button id="interact">Pick up?</button>`;
@@ -150,7 +179,7 @@ function HandlePopup(currentCell: Cell): HTMLDivElement {
     popupDiv
       .querySelector<HTMLButtonElement>("#interact")!
       .addEventListener("click", () => {
-        numberHeld = currentCell.value;
+        player.numberHeld = currentCell.value;
         currentCell.value = 0;
         updateInventory();
         currentCell.rect.closePopup();
@@ -174,6 +203,14 @@ function updateTooltip(currentCell: Cell) {
   } else {
     currentCell.rect.unbindTooltip();
   }
+}
+
+function latToCellI(lat: number): number {
+  return Math.floor((lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+}
+
+function lngToCellj(lng: number): number {
+  return Math.floor((lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
 }
 
 // Add caches to the map by cell number

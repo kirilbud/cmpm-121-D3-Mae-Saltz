@@ -5,3 +5,4 @@ Plan:
 - [ ] modified cells are to be stored for look up later
 - [ ] stylize the game more
 - [ ] Connect geo location to the game
+- [ ] add buttons for movement
