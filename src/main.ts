@@ -15,6 +15,7 @@ interface Cell {
   value: number;
   i: number;
   j: number;
+  originalvalue: number;
   rect: leaflet.Rectangle;
 }
 
@@ -24,6 +25,8 @@ interface playerInfo {
 }
 
 const activeCells: Map<string, Cell> = new Map();
+
+const modifiedCells: Map<string, Cell> = new Map();
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -47,7 +50,7 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19.2;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 18;
+const NEIGHBORHOOD_SIZE = 19;
 const PLAYER_RANGE = 5;
 //const CACHE_SPAWN_PROBABILITY = 1;
 
@@ -129,6 +132,9 @@ westButton.addEventListener("click", () => {
 });
 
 function updateInventory() {
+  if (player.numberHeld >= 64) {
+    alert("you won the game");
+  }
   if (player.numberHeld != 0) {
     statusPanelDiv.innerHTML =
       `You are holding the number = ${player.numberHeld}`;
@@ -137,9 +143,9 @@ function updateInventory() {
   }
 }
 
+//return the number of a cells value based on position
 function makeValue(i: number, j: number): number {
   const rng = luck([i, j, "initialValue"].toString());
-
   if (rng < .7) {
     return 0;
   } else if (rng < .85) {
@@ -174,9 +180,30 @@ function MovePlayer(lat: number, lng: number) {
   for (let i = iStart; i < iEnd; i++) {
     for (let j = jStart; j < jEnd; j++) {
       console.log(i);
-      const thisCell = activeCells.get(`${i}, ${j}`);
+      const thisCell = activeCells.get(cellKey(i, j));
       if (thisCell === undefined) {
-        spawnCache(i, j);
+        //has this cell been modified before if it has spawn that one if it hasnt make it again
+        const modifiedcell = modifiedCells.get(cellKey(i, j));
+        if (modifiedcell !== undefined) {
+          // Re-add the cached rectangle to the map (it was removed during cleanup)
+          modifiedcell.rect.addTo(map);
+
+          modifiedcell.rect.bindPopup(() => {
+            return HandlePopup(modifiedcell);
+          });
+
+          updateTooltip(modifiedcell);
+          if (!isInRange(i, j)) {
+            modifiedcell.rect.setStyle({ color: "red" });
+          } else {
+            modifiedcell.rect.setStyle({ color: "#3388ff" });
+          }
+
+          activeCells.set(cellKey(i, j), modifiedcell);
+          modifiedCells.delete(cellKey(i, j));
+        } else {
+          spawnCache(i, j);
+        }
         continue;
       }
       HandlePopup(thisCell);
@@ -189,9 +216,38 @@ function MovePlayer(lat: number, lng: number) {
   }
 
   //remove old cells
-  //for (const [key, value] of activeCells) {
-  //console.log(`${key}: ${value}`);
-  //}
+  const keysToRemove: string[] = [];
+  for (const [key, value] of activeCells) {
+    //parse the string
+    const [si, sj] = key.split(",");
+    const i = parseInt(si.trim(), 10);
+    const j = parseInt(sj.trim(), 10);
+    //check if in bounds
+    if ((i >= iStart && i < iEnd) && (j >= jStart && j < jEnd)) {
+      console.log(`${key}: ${value}`);
+    } else {
+      //check if it was modified if it wasnt then store it for later
+      if (value.value !== value.originalvalue) {
+        modifiedCells.set(cellKey(i, j), value);
+      }
+      keysToRemove.push(key);
+    }
+  }
+
+  for (const key of keysToRemove) {
+    const cell = activeCells.get(key);
+    if (!cell) continue;
+    if (typeof cell.rect.remove === "function") {
+      cell.rect.remove();
+    } else {
+      map.removeLayer(cell.rect);
+    }
+    activeCells.delete(key);
+  }
+}
+
+function cellKey(i: number, j: number): string {
+  return `${i},${j}`;
 }
 
 function HandlePopup(currentCell: Cell): HTMLDivElement {
@@ -293,10 +349,11 @@ function spawnCache(i: number, j: number) {
     value: pointValue,
     i: i,
     j: j,
+    originalvalue: pointValue,
     rect: rect,
   };
 
-  activeCells.set(`${i}, ${j}`, thisCell);
+  activeCells.set(cellKey(i, j), thisCell);
 
   //check if player is in bounds of box if not change it to red
   if (!isInRange(i, j)) {
