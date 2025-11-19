@@ -6,5 +6,5 @@
 - [x] added momento pattern
 - [x] added save load
 - [ ] stylize the game more
-- [ ] Connect geo location to the game
+- [x] Connect geo location to the game
 - [x] add buttons for movement
