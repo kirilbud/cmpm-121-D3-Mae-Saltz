@@ -4,6 +4,7 @@
 - [x] generate cells infinetly
 - [x] modified cells are to be stored for look up later
 - [x] added momento pattern
+- [x] added save load
 - [ ] stylize the game more
 - [ ] Connect geo location to the game
 - [x] add buttons for movement

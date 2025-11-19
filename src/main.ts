@@ -31,9 +31,18 @@ interface playerInfo {
   marker: leaflet.Marker;
 }
 
+interface SavedGame {
+  modifiedEntries: Array<[string, CellMemento]>;
+  playerHeld: number;
+  playerLat: number;
+  playerLng: number;
+}
+
 const activeCells: Map<string, Cell> = new Map();
 
 const modifiedCells: Map<string, CellMemento> = new Map();
+
+let isGeolocation = false;
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -138,6 +147,91 @@ westButton.addEventListener("click", () => {
   );
 });
 
+const locationToggleDiv = document.createElement("div");
+document.body.append(locationToggleDiv);
+
+const locationToggle = document.createElement("button");
+locationToggle.innerHTML = "Enable Geolocation";
+locationToggleDiv.appendChild(locationToggle);
+locationToggle.addEventListener("click", () => {
+  if (movementButtonsDiv.hidden) {
+    movementButtonsDiv.hidden = false;
+    locationToggle.innerHTML = "Enable Geolocation";
+    isGeolocation = false;
+  } else {
+    movementButtonsDiv.hidden = true;
+    isGeolocation = true;
+    locationToggle.innerHTML = "Enable Button Movement";
+  }
+});
+
+const saveLoadDiv = document.createElement("div");
+document.body.append(saveLoadDiv);
+
+const saveButton = document.createElement("button");
+saveButton.innerHTML = "Save";
+saveLoadDiv.appendChild(saveButton);
+saveButton.addEventListener("click", () => {
+  for (const [key, cell] of activeCells) {
+    if (cell.value !== cell.originalvalue) {
+      modifiedCells.set(key, makeMementoFromCell(cell));
+    } else {
+      modifiedCells.delete(key);
+    }
+  }
+
+  const saved: SavedGame = {
+    modifiedEntries: Array.from(modifiedCells.entries()),
+    playerHeld: player.numberHeld,
+    playerLat: player.marker.getLatLng().lat,
+    playerLng: player.marker.getLatLng().lng,
+  };
+
+  localStorage.setItem("savedGame", JSON.stringify(saved));
+  alert("game saved");
+});
+
+const loadButton = document.createElement("button");
+loadButton.innerHTML = "Load";
+saveLoadDiv.appendChild(loadButton);
+loadButton.addEventListener("click", () => {
+  const raw = localStorage.getItem("savedGame");
+  if (!raw) {
+    alert("No save data found.");
+    return;
+  }
+
+  try {
+    const parsed: SavedGame = JSON.parse(raw);
+    modifiedCells.clear();
+    for (const [k, m] of parsed.modifiedEntries ?? []) {
+      modifiedCells.set(k, m);
+    }
+    for (const [_key, cell] of activeCells) {
+      if (cell.rect) {
+        if (typeof cell.rect.remove === "function") {
+          cell.rect.remove();
+        } else {
+          map.removeLayer(cell.rect);
+        }
+      }
+    }
+    activeCells.clear();
+
+    player.numberHeld = parsed.playerHeld ?? 0;
+    updateInventory();
+
+    const lat = parsed.playerLat ?? CLASSROOM_LATLNG.lat;
+    const lng = parsed.playerLng ?? CLASSROOM_LATLNG.lng;
+    player.marker.setLatLng(leaflet.latLng(lat, lng));
+
+    MovePlayer(lat, lng);
+  } catch (err) {
+    console.error("Failed to load save:", err);
+    alert("Failed to load save (parse error).");
+  }
+});
+
 function updateInventory() {
   if (player.numberHeld >= 64) {
     alert("you won the game");
@@ -203,6 +297,10 @@ function MovePlayer(lat: number, lng: number) {
       } else {
         thisCell.rect.setStyle({ color: "#3388ff" });
       }
+    }
+
+    if (isGeolocation) {
+      console.log("geolocation");
     }
   }
 
