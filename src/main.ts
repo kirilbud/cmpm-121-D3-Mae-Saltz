@@ -161,6 +161,7 @@ locationToggle.addEventListener("click", () => {
   } else {
     movementButtonsDiv.hidden = true;
     isGeolocation = true;
+    setInterval(geolocationLoop, 50);
     locationToggle.innerHTML = "Enable Button Movement";
   }
 });
@@ -231,6 +232,19 @@ loadButton.addEventListener("click", () => {
     alert("Failed to load save (parse error).");
   }
 });
+
+function geolocationLoop() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition((position) => {
+      MovePlayer(position.coords.latitude, position.coords.longitude);
+    }, () => {
+      console.log("errorgetting location");
+    }, { enableHighAccuracy: true });
+  } else {
+    alert("Geolocation is not supported by this browser.");
+    return;
+  }
+}
 
 function updateInventory() {
   if (player.numberHeld >= 64) {
