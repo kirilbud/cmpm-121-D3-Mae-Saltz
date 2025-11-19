@@ -19,6 +19,13 @@ interface Cell {
   rect: leaflet.Rectangle;
 }
 
+interface CellMemento {
+  i: number;
+  j: number;
+  value: number;
+  originalvalue: number;
+}
+
 interface playerInfo {
   numberHeld: number;
   marker: leaflet.Marker;
@@ -26,7 +33,7 @@ interface playerInfo {
 
 const activeCells: Map<string, Cell> = new Map();
 
-const modifiedCells: Map<string, Cell> = new Map();
+const modifiedCells: Map<string, CellMemento> = new Map();
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -179,28 +186,12 @@ function MovePlayer(lat: number, lng: number) {
   const jEnd = lngToCellJ(player.marker.getLatLng().lng) + NEIGHBORHOOD_SIZE;
   for (let i = iStart; i < iEnd; i++) {
     for (let j = jStart; j < jEnd; j++) {
-      console.log(i);
       const thisCell = activeCells.get(cellKey(i, j));
       if (thisCell === undefined) {
         //has this cell been modified before if it has spawn that one if it hasnt make it again
         const modifiedcell = modifiedCells.get(cellKey(i, j));
         if (modifiedcell !== undefined) {
-          // Re-add the cached rectangle to the map (it was removed during cleanup)
-          modifiedcell.rect.addTo(map);
-
-          modifiedcell.rect.bindPopup(() => {
-            return HandlePopup(modifiedcell);
-          });
-
-          updateTooltip(modifiedcell);
-          if (!isInRange(i, j)) {
-            modifiedcell.rect.setStyle({ color: "red" });
-          } else {
-            modifiedcell.rect.setStyle({ color: "#3388ff" });
-          }
-
-          activeCells.set(cellKey(i, j), modifiedcell);
-          modifiedCells.delete(cellKey(i, j));
+          spawnCache(i, j, modifiedcell);
         } else {
           spawnCache(i, j);
         }
@@ -223,12 +214,10 @@ function MovePlayer(lat: number, lng: number) {
     const i = parseInt(si.trim(), 10);
     const j = parseInt(sj.trim(), 10);
     //check if in bounds
-    if ((i >= iStart && i < iEnd) && (j >= jStart && j < jEnd)) {
-      console.log(`${key}: ${value}`);
-    } else {
+    if (!((i >= iStart && i < iEnd) && (j >= jStart && j < jEnd))) {
       //check if it was modified if it wasnt then store it for later
       if (value.value !== value.originalvalue) {
-        modifiedCells.set(cellKey(i, j), value);
+        modifiedCells.set(cellKey(i, j), makeMementoFromCell(value));
       }
       keysToRemove.push(key);
     }
@@ -329,9 +318,19 @@ function lngToCellJ(lng: number): number {
   return Math.floor((lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
 }
 
+function makeMementoFromCell(cell: Cell): CellMemento {
+  return {
+    i: cell.i,
+    j: cell.j,
+    value: cell.value,
+    originalvalue: cell.originalvalue,
+  };
+}
+
 // Add caches to the map by cell number
-function spawnCache(i: number, j: number) {
+function spawnCache(i: number, j: number, memento?: CellMemento) {
   // Convert cell numbers into lat/lng bounds
+  const pointValue = memento ? memento.value : makeValue(i, j);
 
   const origin = CLASSROOM_LATLNG;
   const bounds = leaflet.latLngBounds([
@@ -343,13 +342,11 @@ function spawnCache(i: number, j: number) {
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
-  const pointValue = makeValue(i, j);
-
   const thisCell: Cell = {
     value: pointValue,
     i: i,
     j: j,
-    originalvalue: pointValue,
+    originalvalue: memento ? memento.originalvalue : pointValue,
     rect: rect,
   };
 
