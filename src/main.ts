@@ -68,7 +68,6 @@ const GAMEPLAY_ZOOM_LEVEL = 19.2;
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 19;
 const PLAYER_RANGE = 5;
-//const CACHE_SPAWN_PROBABILITY = 1;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
